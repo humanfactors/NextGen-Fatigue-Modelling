@@ -3,7 +3,7 @@ functions{
   //calculates S during wake
   real Sfun(real sw, //sw = S upon waking
              real taw, //taw = time awake
-             real tau_r, //tau_d = controls rate of rise in S during wake
+             real tau_r, //tau_r = controls rate of rise in S during wake
              real U0
              ){ 
     
@@ -16,9 +16,9 @@ functions{
   real Spfun(real ss, //ss = S upon falling asleep
              real tas, //tas = time asleep
              real tau_s, //tau_d = controls rate of decay in S during sleep
-             real U0,     //upper assymptote
-             real tau_la, //rate of change in lower assymptote
-             real ls     //lower assymptote at sleep onset
+             real U0,     //upper asymptote
+             real tau_la, //rate of change in lower asymptote
+             real ls     //lower asymptote at sleep onset
              ){ 
     
     real term1 = ss*exp(-tas/tau_s);
@@ -29,10 +29,10 @@ functions{
   }
   
  //calculates L during wake
-  real Lfun(real lw, //lower assymptote upon falling asleep
+  real Lfun(real lw, //lower asymptote upon falling asleep
            real taw,    //time asleep
-           real tau_la, //rate of change in lower assymptote
-           real U0      //upper assymptote
+           real tau_la, //rate of change in lower asymptote
+           real U0      //upper asymptote
           ){
     real term1 = lw*exp(-taw/tau_la);
     real term2 = U0*(1-exp(-taw/tau_la));
@@ -43,10 +43,10 @@ functions{
   
   
   //calculates L during sleep
-  real Lpfun(real ls, //lower assymptote upon falling asleep
+  real Lpfun(real ls, //lower asymptote upon falling asleep
            real tas,    //time asleep
-           real tau_la, //rate of change in lower assymptote
-           real U0      //upper assymptote
+           real tau_la, //rate of change in lower asymptote
+           real U0      //upper asymptote
           ){
     real term1 = ls*exp(-tas/tau_la);
     real term2 = -2*U0*(1-exp(-tas/tau_la));
@@ -59,7 +59,7 @@ functions{
   real Cfun(real tod, //tod = time of day (in decimal hours)
             real phi,  //phi = phase at beginning of the simulation (I think this should be 0 if t = tod)
             real tau, //tau = period of C process
-            real A //amplitute of process
+            real A //amplitude of process
             ){
     
     real omega = 2*pi()/tau;
@@ -119,7 +119,7 @@ model {
 
   //Calculate level of processes for each observation
   real s_prev;  //level of homeostatic process at previous event
-  real l_prev;  //level of lower assymptote
+  real l_prev;  //level of lower asymptote
   vector[Ntotal] S; //level of homeostatic process
   vector[Ntotal] C; //level of 24-hour circadian process
   vector[Ntotal] L; //lower assumptote of homeostatic process
