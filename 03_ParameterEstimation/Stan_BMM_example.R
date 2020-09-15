@@ -1,4 +1,4 @@
-#Here we provide of BMM estimation in Stan. 
+#Here we provide a simple example of BMM estimation in Stan. 
 #Our example simulates and estimates parameters of the 
 #"unified model of fatigue-related performance impairment" (Rajdev et al., 2013).
 
