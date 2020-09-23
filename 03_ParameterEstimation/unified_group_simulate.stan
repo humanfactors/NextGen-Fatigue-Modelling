@@ -58,7 +58,7 @@ functions{
   
   //calculates C (circadian process)
   real Cfun(real tod, //tod = time of day (in decimal hours)
-            real phi,  //phi = phase at beginning of the simulation (I think this should be 0 if t = tod)
+            real phi,  //phi = phase 
             real tau, //tau = period of C process
             real A //amplitude of process
             ){
@@ -92,11 +92,10 @@ data {
   real<lower=-2,upper=1> L0_raw;
   real phi;
   real<lower=0> kappa;
-  real<lower=0> tau_d; //typically fixed to 4.2  h
-  real<lower=0> tau_r; //typically fixed to 18.2 h
+  real<lower=0> tau_d; 
+  real<lower=0> tau_r; 
   real<lower=0> tau_la;
- // real<lower=0> A;     //typically fixed to 0.12
-  real<lower=0> sigma; //typically not modeled, but necessary for parameter estimation
+  real<lower=0> sigma; 
 
 }  
  

@@ -33,7 +33,7 @@ library(rstan)
 # fatigue - a fatigue observation for each event. For the simulation script, we enter a vector of 0s.
 
 #Example lab data list
-load("03_ParameterEstimation/data_list_sleepdep.RData")
+load("03_ParameterEstimation/data_list_laboratory_example.RData")
 
 #To simulate also need a list of parameters
 #randomly generated from ranges in paper
@@ -74,7 +74,7 @@ simmed_fatigue <- stan(
 fit_list <- data_list
 fit_list$fatigue = round(as.vector(rstan::extract(simmed_fatigue, "pp")$pp))
 
-#Slow: Bayesian MCMC parameter estimation
+#Slow: Bayesian MCMC parameter estimation. Takes about 40 minutes on my laptop.
 fit_fatigue <-
   stan(
     file = "03_ParameterEstimation/unified_group_fit.stan" ,

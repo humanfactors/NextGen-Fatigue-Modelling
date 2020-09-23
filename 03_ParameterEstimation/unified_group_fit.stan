@@ -57,7 +57,7 @@ functions{
   
   //calculates C (circadian process)
   real Cfun(real tod, //tod = time of day (in decimal hours)
-            real phi,  //phi = phase at beginning of the simulation (I think this should be 0 if t = tod)
+            real phi,  //phi = phase offset
             real tau, //tau = period of C process
             real A //amplitude of process
             ){
@@ -96,8 +96,8 @@ parameters {
   real<lower=-8, upper=8>phi;
   real<lower=0> kappa;
   real<lower=0, upper=1> S0_raw;
-  real<lower=0, upper=6> tau_d; //typically fixed to 4.2  h
-  real<lower=0, upper=40> tau_r; //typically fixed to 18.2 h
+  real<lower=0, upper=6> tau_d; 
+  real<lower=0, upper=40> tau_r; 
    real<lower=0> sigma;
     real<lower=24> tau_la;
  
@@ -125,8 +125,8 @@ model {
   vector[Ntotal] L; //lower assumptote of homeostatic process
    
   //parameters
-  U0 ~ normal(22.5,15); //centred on midpoint of scale
-  phi ~ normal(0,10); //centred on zero
+  U0 ~ normal(22.5,15); 
+  phi ~ normal(0,10); 
   kappa ~ normal(0,5);
   tau_d ~ normal(3,5); 
   tau_r ~ normal(20,20); 
