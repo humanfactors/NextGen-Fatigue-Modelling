@@ -1,4 +1,9 @@
+library(tidyverse)
+library(lubridate)
+library(FIPS)
+library(RColorBrewer)
 
+## Watch keep revision one
 
 sleeptimes15 <- tibble::tibble(
   sleep.start = seq(
@@ -13,14 +18,18 @@ FIPS_TIMES = FIPS::parse_sleeptimes(sleeptimes15,
                        sleep.id.col = "sleep.id",
                        sleep.start.col = "sleep.start",
                        roundvalue = 15,
-                       series.start = ymd_hms('2018-05-01 09:00:00', tz = "Australia/Perth"),
+                       series.start = ymd_hms('2018-05-01 00:00:00', tz = "Australia/Perth"),
                        series.end = ymd_hms('2018-05-10 23:00:00', tz = "Australia/Perth"))
 
 FIPS_TIMES_CALCD = FIPS_TIMES %>% 
   mutate(working = case_when(
     dplyr::between(time, 0, 3) ~ T,
     dplyr::between(time, 6, 9) ~ T,
-    !is.null(time) ~ F))
+    !is.null(time) ~ F)) %>% 
+  mutate(shiftnumber = case_when(
+    dplyr::between(time, 0, 3) ~ 1,
+    dplyr::between(time, 6, 9) ~ 2,
+    !is.null(time) ~ 0))
 
 
 FIPS_WK1 = FIPS_simulate(FIPS_TIMES_CALCD, "unified", FIPS::unified_make_pvec(phi = 12)) %>% 
@@ -71,4 +80,46 @@ p
 
 
 
+## Watchkeep revision 2
 
+
+PhiFunc = function(FIPS_TIMES,phi) {
+  FIPS_simulate(FIPS_TIMES, "TPM", FIPS::TPM_make_pvec(p = phi)) %>% 
+    mutate(ID = phi) %>%
+    select(ID, datetime,shiftnumber, day, c, working, KSS)
+}
+
+
+
+
+
+phi_hours = list(0:24)
+
+for (i in 0:24) {
+  phi_hours[[i+1]] = PhiFunc(FIPS_TIMES_CALCD, i)
+}
+
+phi_hours_full = bind_rows(phi_hours)
+
+phi_hours_dats = phi_hours_full %>% 
+  filter(working == T, day > 1)
+  # mutate(fatigue = scPhiFunc(FIPS_TIMES_CALCD, i)ale(KSS, center = T, scale = F)) %>% 
+  group_by(ID) %>% 
+
+
+phi_hours_dats %>% 
+  summarise(fatigue_mean = mean(KSS)) %>% 
+  arrange(-fatigue_mean)
+
+# ggstatsplot::ggbetweenstats(phi_hours_dats, ID, fatigue,
+#                             package = "dichromat",
+#                             palette = "DarkRedtoBlue.25")
+
+ggplot(phi_hours_dats, aes(x = ID, y = KSS, group = ID, colour = as.factor(shiftnumber))) +
+  ggplot2::geom_point(position = position_jitter(0.1), alpha = 0.4) +
+  geom_violin(size = 1,
+              alpha = 0.5) +
+  geom_boxplot(alpha = 0.2, position = ggplot2::position_dodge(width = NULL)) +
+  
+
+mypal = colorRampPalette(brewer.pal(4, "PuOr"))(25)
