@@ -1,3 +1,3 @@
-# 2020 - Predicting Fatigue in Extreme Work Environments
+# Next Generation Fatigue Prediction Models (Manuscript)
 
-Materials for submission to Human Factors and Ergonomics in Manufacturing & Service Industries (special issue: Human Factors and Ergonomics Methods).
+This repository contains the code for the manuscript {{TBA}}
