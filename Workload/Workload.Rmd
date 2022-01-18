@@ -1,0 +1,247 @@
+# Workload Model
+
+The following code is a version of the workload model that can be embedded in the FIPS framework as a modular extension.
+The full comptuational implementation is unavaialble at the time of writing, as the code was written as a drafted extension to the FIPS package but has now deviated from the Master FIPS branch.
+Nevertheless, the code is functional and can be used as a starting point for a complete implementation.
+
+We reccomend researchers that are interested in using this model to begin by consulting the following papers and repositories:
+
+- https://doi.org/10.21105/joss.02340
+- https://humanfactors.github.io/FIPS/
+
+```
+#' Make Workload Unified Default (pvec) Parameters
+#'
+#' The default unified model parameters from:
+#' Ramakrishnan, S., Wesensten, N. J., Balkin, T. J., \& Reifman, J.
+#' (2016). A Unified Model of Performance: Validation of its Predictions
+#' across Different Sleep/Wake Schedules. \emph{Sleep}, \emph{39}(1),
+#' 249--262. \url{https://doi.org/10.5665/sleep.5358}
+#' @param U0 Upper asymptote (defaults to = 24.12)
+#' @param L0 Lower asymptote(defaults to = 0,   # (0.88 * 3 - 2)*1.74)
+#' @param S0 Initial starting point of S process (defaults to = 0,   # 1.11 + (1.74-1.11)*0.64)
+#' @param phi Phase at beginning of the simulation (defaults to = 2.02)
+#' @param kappa Relative influence of C process (defaults to = 4.13)
+#' @param tau_s Controls rate of decay in S during sleep (defaults to = 1)
+#' @param tau_w  Controls rate of rise in S during wake (defaults to = 40)
+#' @param tau_la Rate of change in lower asymptote (defaults to = 4.06*24)
+#' @param sigma error term - ignore unless you have error calculations (defaults to = 1)
+#' @param wc Sleep inertia: extent of alertness reduction at time of waking (typically = -5.72) (defaults to = 1.14)
+#' @param wd Sleep inertia: exponential recovery of alertness (typically = -1.51) (defaults to = -0.4)
+#'
+#' @param workfatigue_tau_rec time constant controlling the rate of recovery from work
+#' @param workfatigue_homeo_beta Coefficient controlling the linear relationship between workload-induced fatigue and homeostatic pressure over the work period
+#' @param workfatigue_W0 initial working fatigue value
+#' @param workfatigue_la value of the lower asymptote for workload-induced fatigue
+#' @param workfatigue_weight Controls influence of workload function on basal fatigue equation
+#'
+#' @export
+unified_workfatigue_make_pvec <- function(
+  U0 = 24.12,
+  L0 = 0,
+  S0 = 0,
+  phi = 2.02,
+  kappa = 4.13,
+  tau_s = 1,
+  tau_w = 40,
+  tau_la = 4.06*24,
+  sigma = 1,
+  wc = 1.14,
+  wd = -0.46,
+  workfatigue_tau_rec = 3,
+  workfatigue_homeo_beta = 0.01,
+  workfatigue_W0 = 2,
+  workfatigue_la = 0,
+  workfatigue_weight = 1) {
+    # Essentially just allow user to change values, otherwise default
+    pvec <- c(U0 = U0,  L0 = L0, S0 = S0, phi = phi, kappa = kappa, tau_s = tau_s,
+    tau_w = tau_w, tau_la = tau_la, sigma = sigma, wc = wc, wd = wd,
+    # New workload things
+    workfatigue_tau_rec = workfatigue_tau_rec,
+    workfatigue_homeo_beta = workfatigue_homeo_beta,
+    workfatigue_W0 = workfatigue_W0,
+    workfatigue_la = workfatigue_la,
+    workfatigue_weight = workfatigue_weight)
+    return(pvec)
+}
+
+#Get S integral for one time point
+integrate_S <- function(s_at_start, t, tau_w, U) {
+  r_coef = exp(-t / tau_w)
+  return(U * t - tau_w * (s_at_start - U) * r_coef)
+}
+
+workfatigue_integral_S <- function(s_at_start, t, tau_w, U) {
+  #Only want the positive bit of the integral
+  #if s starts above 0, no problem
+  if(!s_at_start < 0) {
+
+    S_integral = integrate_S(s_at_start, t, tau_w, U) -
+      integrate_S(s_at_start, 0, tau_w, U)
+
+  #but if s starts below 0, we have to find the point where it crossed 0 and start
+  #the integration from there
+  } else if(s_at_start < 0) {
+
+    #Find the x-intercept
+    S_x_intercept = -log(U / (U - s_at_start)) * tau_w
+
+    # Note formula above finds x intercept for U no matter where it is.
+    # If it's not within this work period, that means we have no +ve integral.
+    # set S integral to 0 in that case
+    # Otherwise, use S_x_intercept as the left bound of integration,
+    # to integrate only the +ve bit.
+    if (S_x_intercept > t) {
+      S_integral = 0
+    } else {
+      S_integral = integrate_S(s_at_start, t, tau_w, U) -
+        integrate_S(s_at_start, S_x_intercept, tau_w, U)
+    }
+  }
+  return(S_integral)
+}
+
+unified_workfatigue_during <- function(last_w, workfatigue_homeo_beta, S_integral){
+  W = last_w + workfatigue_homeo_beta * S_integral
+  return(W)
+}
+
+#' Unified workfatigue recovery function
+#' Calculates S during wake
+#' @param tnw Time not working
+#' @param last_w Controls rate of rise in S during wake
+#' @param workfatigue_tau_rec time constant controlling the rate of recovery from work
+#' @param workfatigue_la value of the lower asymptote for workload-induced fatigue
+#'
+unified_workfatigue_recovery <- function(tnw, last_w, workfatigue_tau_rec, workfatigue_la){
+  d = exp(-tnw / workfatigue_tau_rec)
+  W = workfatigue_la-d*(workfatigue_la - last_w)
+  return(W)
+}
+
+
+workload_cols = c("s", "l", "c", "w", "workfatigue", "lapses", "fatigue")
+unified_workfatigue_append_model_cols <- function(.FIPS_df) {
+  .FIPS_df[,workload_cols] = NA
+  return(.FIPS_df)
+}
+
+#' Simulate: Unified Workload A Model
+#'
+#' Runs a full simulation of the 'Unified Workload Model B'.
+#'
+#' @section References:
+#'
+#' @param pvec a vector of default parameters, see [unified_workfatigue_pvec]
+#' @param dat input dataframe (ensure this is a FIPs_at_workstartfatigue_df)
+#'
+#' @return simulated dataset complete
+#' @import FIPS
+#' @export
+unified_workfatigue_simulate <- function(pvec, dat) {
+
+  # Hacked direct imports
+  FIPS_simulation = FIPS:::FIPS_simulation
+  unified_Cfun = FIPS:::unified_Cfun
+  unified_Lfun = FIPS:::unified_Lfun
+  unified_Sfun = FIPS:::unified_Sfun
+  unified_Spfun = FIPS:::unified_Spfun
+  unified_Wfun = FIPS:::unified_Wfun
+
+  #Lfun fix
+  unified_Lpfun = function(ls, tas, tau_la, U0) {
+    L = ls * exp(-tas/tau_la) - (2 * U0) * (1 - exp(-tas/tau_la))
+    return(max(L,0))
+  }
+
+  # check pvec
+  unified_workfatigue_check_pvec(pvec)
+  # Add the unified model columns
+  dat = unified_workfatigue_append_model_cols(dat)
+
+  # Initialise S and L
+  if (dat$wake_status[1]) {
+    s_at_wake = pvec["S0"]
+    l_at_wake = pvec["L0"]
+  } else {
+    s_at_sleep = pvec["S0"]
+    l_at_sleep = pvec["L0"]
+  }
+
+  # TODO: Ensure that we have all required parameters for workload functions in dataframes
+
+  #Initialise Workload (i.e., if at start of simulation working, else...)
+  if (dat$work_status[1]) {
+    workfatigue_work = pvec["workfatigue_W0"]
+    hrs_work <- dat$sim_hours[1]
+  } else {
+    workfatigue_at_workend = pvec["workfatigue_W0"]
+    hrs_nonwork <- dat$sim_hours[1]
+  }
+
+
+  # Simulation loop over FIPSdf
+  for (i in 1:nrow(dat)) {
+
+    # Calculate S and L at start of wake
+    if (i > 1 & dat$change_point[i] == 1 & dat$switch_direction[i] == "Wake") {
+      s_at_wake = unified_Spfun(s_at_sleep, dat$total_prev[i], pvec["tau_s"], pvec["U0"], pvec["tau_la"], l_at_sleep)
+      l_at_wake = unified_Lpfun(l_at_sleep, dat$total_prev[i], pvec["tau_la"], pvec["U0"])
+    }
+    # Calculate S and L at start of sleep
+    if (i > 1 & dat$change_point[i] == 1 & dat$switch_direction[i] == "Sleep") {
+      s_at_sleep = unified_Sfun(s_at_wake, dat$total_prev[i], pvec["tau_w"], pvec["U0"])
+      l_at_sleep = unified_Lfun(l_at_wake, dat$total_prev[i], pvec["tau_la"], pvec["U0"])
+    }
+
+    # Calculate W at start of work
+    if (i > 1 & dat$work_change_point[i] == 1 & dat$work_status[i] == 1) {
+      workfatigue_at_workstart = unified_workfatigue_recovery(dat$sim_hours[i] - hrs_nonwork, workfatigue_at_workend, pvec["workfatigue_tau_rec"], pvec["workfatigue_la"])
+      #Note fixed a bug which was incorrectly calculating S at workstart
+      s_at_workstart = unified_Sfun(s_at_wake, dat$status_duration[i], pvec["tau_w"], pvec["U0"])
+      hrs_work = dat$sim_hours[i]
+    }
+
+    # Calculate W at stop of work
+    if (i > 1 & dat$work_change_point[i] == 1 & dat$work_status[i] == 0) {
+      S_integral = workfatigue_integral_S(s_at_workstart, dat$sim_hours[i] - hrs_work, pvec["tau_w"], pvec["U0"])
+      workfatigue_at_workend = unified_workfatigue_during(workfatigue_at_workstart, pvec["workfatigue_homeo_beta"], S_integral)
+      hrs_nonwork = dat$sim_hours[i]
+    }
+
+    #Calculate S, L, and W at that point in time
+    # wake_status == T == Awake
+    if (dat$wake_status[i]) {
+      dat$s[i] = unified_Sfun(s_at_wake, dat$status_duration[i], pvec["tau_w"], pvec["U0"])
+      dat$l[i] = unified_Lfun(l_at_wake, dat$status_duration[i], pvec["tau_la"], pvec["U0"])
+      dat$w[i] = unified_Wfun(dat$status_duration[i], pvec["wc"], pvec["wd"])
+    } else {
+      dat$s[i] = unified_Spfun(s_at_sleep, dat$status_duration[i], pvec["tau_s"], pvec["U0"], pvec["tau_la"], l_at_sleep)
+      dat$l[i] = unified_Lpfun(l_at_sleep, dat$status_duration[i], pvec["tau_la"], pvec["U0"])
+      dat$w[i] = 0
+    }
+
+    if (dat$work_status[i]) {
+      S_integral = workfatigue_integral_S(s_at_workstart, dat$sim_hours[i] - hrs_work, pvec["tau_w"], pvec["U0"])
+      dat$workfatigue[i] = unified_workfatigue_during(workfatigue_at_workstart, pvec["workfatigue_homeo_beta"], S_integral)
+    } else {
+      dat$workfatigue[i] = unified_workfatigue_recovery(dat$sim_hours[i] - hrs_nonwork, workfatigue_at_workend, pvec["workfatigue_tau_rec"], pvec["workfatigue_la"])
+    }
+
+
+    dat$c[i] = unified_Cfun(dat$time[i], pvec["phi"])
+    dat$lapses[i] = dat$s[i] + pvec["kappa"] * dat$c[i]
+    dat$fatigue_with_wl[i] = dat$s[i] + (pvec["kappa"] * dat$c[i]) + (pvec["workfatigue_weight"] * dat$workfatigue[i])
+    dat$fatigue[i] = dat$s[i] + pvec["kappa"] * dat$c[i]
+  }
+
+
+  # Assign as FIPS_simulation given the simulation is now successful
+  dat <- FIPS_simulation(dat, modeltype = "unified_workfatigue", pvec = pvec, pred_stat = "fatigue", pred_cols = workload_cols)
+
+
+  return(dat)
+
+}
+
+```
